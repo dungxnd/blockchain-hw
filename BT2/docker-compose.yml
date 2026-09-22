@@ -1,0 +1,110 @@
+version: '3.8'
+
+# ==============================================================================
+# Docker Compose: 3-Node MongoDB Replica Set demonstrating Replication & Consensus
+# Mô hình phân tán:
+#   - mongo1 (Port máy host: 27017)
+#   - mongo2 (Port máy host: 27018)
+#   - mongo3 (Port máy host: 27019)
+#   - mongo-init: Tự động khởi tạo Replica Set rs0 khi 3 node sẵn sàng
+# ==============================================================================
+
+services:
+  # Node 1: Thành viên Replica Set
+  mongo1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: custom-mongo:7.0-slim
+    container_name: mongo1
+    hostname: mongo1
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo1_data:/data/db
+    networks:
+      - mongo-network
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27017", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # Node 2: Thành viên Replica Set
+  mongo2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: custom-mongo:7.0-slim
+    container_name: mongo2
+    hostname: mongo2
+    restart: unless-stopped
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo2_data:/data/db
+    networks:
+      - mongo-network
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27017", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # Node 3: Thành viên Replica Set
+  mongo3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: custom-mongo:7.0-slim
+    container_name: mongo3
+    hostname: mongo3
+    restart: unless-stopped
+    ports:
+      - "27019:27017"
+    volumes:
+      - mongo3_data:/data/db
+    networks:
+      - mongo-network
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27017", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # Container khởi tạo (Setup Initializer):
+  # Tự động chờ cả 3 node khởi động xong và thực thi rs.initiate()
+  mongo-init:
+    image: custom-mongo:7.0-slim
+    container_name: mongo-init
+    restart: "no"
+    depends_on:
+      mongo1:
+        condition: service_healthy
+      mongo2:
+        condition: service_healthy
+      mongo3:
+        condition: service_healthy
+    networks:
+      - mongo-network
+    entrypoint: ["mongosh", "--host", "mongo1:27017", "/scripts/init-replica.js"]
+
+networks:
+  mongo-network:
+    driver: bridge
+    name: mongo-network
+
+volumes:
+  mongo1_data:
+    name: mongo1_data
+  mongo2_data:
+    name: mongo2_data
+  mongo3_data:
+    name: mongo3_data
